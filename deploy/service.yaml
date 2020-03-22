@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jmeter-service
+  namespace: keptn
+spec:
+  selector:
+    matchLabels:
+      run: jmeter-service
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        run: jmeter-service
+    spec:
+      containers:
+      - name: jmeter-service
+        image: keptn/jmeter-service:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: EVENTBROKER
+          value: 'http://event-broker.keptn.svc.cluster.local/keptn'
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jmeter-service
+  namespace: keptn
+  labels:
+    run: jmeter-service
+spec:
+  ports:
+  - port: 8080
+    protocol: TCP
+  selector:
+    run: jmeter-service
