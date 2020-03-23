@@ -27,13 +27,18 @@ import (
 func handleConfigurationChangeEvent(event cloudevents.Event, shkeptncontext string, data *keptnevents.ConfigurationChangeEventData, logger *keptnutils.Logger) error {
 	logger.Info(fmt.Sprintf("Handling Configuration Changed Event: %s", event.Context.GetID()));
 
-	resource, err := getKeptnResource(data.Project, data.Service, data.Stage, "./scripts/configuration.change.sh", logger)
+	resource, err := getKeptnResource(data.Project, data.Service, data.Stage, "./jenkins/jenkins.json", logger)
 	if (resource != "" && err == nil) {
-		logger.Info("Found script ./scripts/configuration.change.sh");
-		executeCommand(resource, nil, logger);
+		logger.Info("Found jenkins config file");
+		
+		// Step 1: Execute Jenkins Job that is defined in jenkins.json
+
+		// Step 2: Poll Jenkins JOb until done to return result to keptn via "Deployment Finished Event"
+
 	} else {
-		logger.Info("No script found at ./scripts/configuration.change.sh")
+		logger.Info("No jenkins config file found in ./jenkins/jenkins.json")
 	}
+
 
 	return nil
 }
