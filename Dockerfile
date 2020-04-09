@@ -1,17 +1,19 @@
 # Use the offical Golang image to create a build artifact.
 # This is based on Debian and sets the GOPATH to /go.
 # https://hub.docker.com/_/golang
-FROM golang:1.12.13-alpine as builder
+FROM golang:1.13.7-alpine as builder
+
+RUN apk add --no-cache gcc libc-dev git
+
+WORKDIR /src/jenkins-service
+
 ARG version=develop
+ENV VERSION="${version}"
 
-WORKDIR /go/src/github.com/keptn/keptn/jenkins-service
-
-# Force the go compiler to use modules 
+# Force the go compiler to use modules
 ENV GO111MODULE=on
 ENV BUILDFLAGS=""
 ENV GOPROXY=https://proxy.golang.org
-
-RUN apk add --no-cache gcc libc-dev git
 
 # Copy `go.mod` for definitions and `go.sum` to invalidate the next layer
 # in case of a change in the dependencies
@@ -32,21 +34,24 @@ COPY . .
 # (You may fetch or manage dependencies here, either manually or with a tool like "godep".)
 RUN GOOS=linux go build -ldflags '-linkmode=external' $BUILDFLAGS -v -o jenkins-service
 
+# Use a Docker multi-stage build to create a lean production image.
+# https://docs.docker.com/develop/develop-images/multistage-build/#use-multi-stage-builds
+FROM alpine:3.11
+ENV ENV=production
+
 # Install extra packages
 # See https://github.com/gliderlabs/docker-alpine/issues/136#issuecomment-272703023
-# Change TimeZone TODO: TZ still is not set!
-ARG TZ="Europe/Amsterdam"
-RUN    apk update \
-	&& apk upgrade \
+
+RUN    apk update && apk upgrade \
 	&& apk add ca-certificates libc6-compat \
 	&& update-ca-certificates \
-	&& apk add --update openjdk8-jre tzdata curl unzip bash \
-	&& apk add --no-cache nss \
-	&& rm -rf /var/cache/apk/* \
-	&& mkdir -p /tmp/dependencies
+	&& rm -rf /var/cache/apk/*
+
+ARG version=develop
+ENV VERSION="${version}"
 
 # Copy the binary to the production image from the builder stage.
-COPY --from=builder /go/src/github.com/keptn/keptn/jenkins-service/jenkins-service /jenkins-service
+COPY --from=builder /src/jenkins-service/jenkins-service /jenkins-service
 
 EXPOSE 8080
 
@@ -54,8 +59,8 @@ EXPOSE 8080
 ENV GOTRACEBACK=all
 
 # KEEP THE FOLLOWING LINES COMMENTED OUT!!! (they will be included within the travis-ci build)
-#travis-uncomment ADD MANIFEST /
-#travis-uncomment COPY entrypoint.sh /
+#travis-uncomment ADD docker/MANIFEST /
+#travis-uncomment COPY docker/entrypoint.sh /
 #travis-uncomment ENTRYPOINT ["/entrypoint.sh"]
 
 # Run the web service on container startup.

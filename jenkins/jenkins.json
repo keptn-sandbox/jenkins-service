@@ -1,5 +1,0 @@
-{
-    "jenkinsUrl" : "https://myjenkins",
-    "jenkinsProject" : "$PROJECT",
-    "jenkinsJob" : "DeployJob"
-}

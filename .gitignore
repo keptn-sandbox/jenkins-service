@@ -14,6 +14,14 @@
 vendor/*
 .DS_Store
 
-#binary - go build
-jenkins-service
+# binaries (created by go build on Linux/OSX)
 main
+jenkins-service
+
+# IDE specific folders
+.vscode
+
+# only ignore contents of local .idea
+.idea/*
+# but allow .idea shared run configurations
+!.idea/runConfigurations/
