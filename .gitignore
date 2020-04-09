@@ -25,3 +25,6 @@ jenkins-service
 .idea/*
 # but allow .idea shared run configurations
 !.idea/runConfigurations/
+
+# my local test files
+_*
