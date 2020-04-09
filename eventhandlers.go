@@ -1,16 +1,16 @@
 package main
 
 import (
-	"log"
+	"fmt"
+
+	keptnevents "github.com/keptn/go-utils/pkg/events"
+	keptnutils "github.com/keptn/go-utils/pkg/utils"
 
 	"github.com/cloudevents/sdk-go/pkg/cloudevents"
-	keptn "github.com/keptn/go-utils/pkg/lib"
 )
 
 /**
-* Here are all the handler functions for the individual event
-  See https://github.com/keptn/spec/blob/0.1.3/cloudevents.md for details on the payload
-
+* Here are all the handler functions for the individual events
   -> "sh.keptn.event.configuration.change"
   -> "sh.keptn.events.deployment-finished"
   -> "sh.keptn.events.tests-finished"
@@ -24,8 +24,8 @@ import (
 // Handles ConfigurationChangeEventType = "sh.keptn.event.configuration.change"
 // TODO: add in your handler code
 //
-func HandleConfigurationChangeEvent(myKeptn *keptn.Keptn, incomingEvent cloudevents.Event, data *keptn.ConfigurationChangeEventData) error {
-	log.Printf("Handling Configuration Changed Event: %s", incomingEvent.Context.GetID())
+func handleConfigurationChangeEvent(event cloudevents.Event, keptnEvent baseKeptnEvent, data *keptnevents.ConfigurationChangeEventData, logger *keptnutils.Logger) error {
+	logger.Info(fmt.Sprintf("Handling Configuration Changed Event: %s", event.Context.GetID()))
 
 	return nil
 }
@@ -34,17 +34,9 @@ func HandleConfigurationChangeEvent(myKeptn *keptn.Keptn, incomingEvent cloudeve
 // Handles DeploymentFinishedEventType = "sh.keptn.events.deployment-finished"
 // TODO: add in your handler code
 //
-func HandleDeploymentFinishedEvent(myKeptn *keptn.Keptn, incomingEvent cloudevents.Event, data *keptn.DeploymentFinishedEventData) error {
-	log.Printf("Handling Deployment Finished Event: %s", incomingEvent.Context.GetID())
+func handleDeploymentFinishedEvent(event cloudevents.Event, keptnEvent baseKeptnEvent, data *keptnevents.DeploymentFinishedEventData, logger *keptnutils.Logger) error {
+	logger.Info(fmt.Sprintf("Handling Deployment Finished Event: %s", event.Context.GetID()))
 
-	// capture start time for tests
-	// startTime := time.Now()
-
-	// run tests
-	// ToDo: Implement your tests here
-
-	// Send Test Finished Event
-	// return myKeptn.SendTestsFinishedEvent(&incomingEvent, "", "", startTime, "pass", nil, "jenkins-service")
 	return nil
 }
 
@@ -52,8 +44,8 @@ func HandleDeploymentFinishedEvent(myKeptn *keptn.Keptn, incomingEvent cloudeven
 // Handles TestsFinishedEventType = "sh.keptn.events.tests-finished"
 // TODO: add in your handler code
 //
-func HandleTestsFinishedEvent(myKeptn *keptn.Keptn, incomingEvent cloudevents.Event, data *keptn.TestsFinishedEventData) error {
-	log.Printf("Handling Tests Finished Event: %s", incomingEvent.Context.GetID())
+func handleTestsFinishedEvent(event cloudevents.Event, keptnEvent baseKeptnEvent, data *keptnevents.TestsFinishedEventData, logger *keptnutils.Logger) error {
+	logger.Info(fmt.Sprintf("Handling Tests Finished Event: %s", event.Context.GetID()))
 
 	return nil
 }
@@ -62,8 +54,8 @@ func HandleTestsFinishedEvent(myKeptn *keptn.Keptn, incomingEvent cloudevents.Ev
 // Handles EvaluationDoneEventType = "sh.keptn.events.evaluation-done"
 // TODO: add in your handler code
 //
-func HandleStartEvaluationEvent(myKeptn *keptn.Keptn, incomingEvent cloudevents.Event, data *keptn.StartEvaluationEventData) error {
-	log.Printf("Handling Start Evaluation Event: %s", incomingEvent.Context.GetID())
+func handleStartEvaluationEvent(event cloudevents.Event, keptnEvent baseKeptnEvent, data *keptnevents.StartEvaluationEventData, logger *keptnutils.Logger) error {
+	logger.Info(fmt.Sprintf("Handling Start Evaluation Event: %s", event.Context.GetID()))
 
 	return nil
 }
@@ -72,8 +64,8 @@ func HandleStartEvaluationEvent(myKeptn *keptn.Keptn, incomingEvent cloudevents.
 // Handles DeploymentFinishedEventType = "sh.keptn.events.deployment-finished"
 // TODO: add in your handler code
 //
-func HandleEvaluationDoneEvent(myKeptn *keptn.Keptn, incomingEvent cloudevents.Event, data *keptn.EvaluationDoneEventData) error {
-	log.Printf("Handling Evaluation Done Event: %s", incomingEvent.Context.GetID())
+func handleEvaluationDoneEvent(event cloudevents.Event, keptnEvent baseKeptnEvent, data *keptnevents.EvaluationDoneEventData, logger *keptnutils.Logger) error {
+	logger.Info(fmt.Sprintf("Handling Evaluation Done Event: %s", event.Context.GetID()))
 
 	return nil
 }
@@ -83,8 +75,8 @@ func HandleEvaluationDoneEvent(myKeptn *keptn.Keptn, incomingEvent cloudevents.E
 // Handles ProblemEventType = "sh.keptn.events.problem"
 // TODO: add in your handler code
 //
-func HandleProblemEvent(myKeptn *keptn.Keptn, incomingEvent cloudevents.Event, data *keptn.ProblemEventData) error {
-	log.Printf("Handling Problem Event: %s", incomingEvent.Context.GetID())
+func handleProblemEvent(event cloudevents.Event, keptnEvent baseKeptnEvent, data *keptnevents.ProblemEventData, logger *keptnutils.Logger) error {
+	logger.Info(fmt.Sprintf("Handling Problem Event: %s", event.Context.GetID()))
 
 	return nil
 }
