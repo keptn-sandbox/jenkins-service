@@ -21,6 +21,7 @@ import (
 const eventbroker = "EVENTBROKER"
 
 var runlocal = (os.Getenv("env") == "runlocal")
+var runlocaltest = (os.Getenv("env") == "runlocaltest")
 
 type envConfig struct {
 	// Port on which to listen for cloudevents
@@ -168,6 +169,7 @@ func processKeptnCloudEvent(ctx context.Context, event cloudevents.Event) error 
  *
  * Environment Variables
  * env=runlocal   -> will fetch resources from local drive instead of configuration service
+ * env=runlocaltest -> everything is fully done locally!
  */
 func main() {
 	var env envConfig
@@ -206,15 +208,77 @@ func _main(args []string, env envConfig) int {
 	logger := keptnutils.NewLogger("Startup", "Init", "jenkins-service")
 	logger.Info(fmt.Sprintf("Port = %d; Path=%s", env.Port, env.Path))
 
-	if err != nil {
-		log.Fatalf("failed to create transport, %v", err)
-	}
-	c, err := client.New(t)
-	if err != nil {
-		log.Fatalf("failed to create client, %v", err)
-	}
+	// TEST
+	if runlocaltest {
+		testLabels := map[string]string{
+			"gitcommit": "abcde123141241",
+			"author":    "andi",
+			"link":      "https://keptn.sh",
+		}
 
-	log.Fatalf("failed to start receiver: %s", c.StartReceiver(ctx, processKeptnCloudEvent))
+		keptnEvent := baseKeptnEvent{
+			event:   "sh.keptn.event.configuration.change",
+			source:  "test local",
+			context: "1234567890",
+			project: "testproject",
+			service: "testservice",
+			stage:   "teststage",
+			labels:  testLabels,
+		}
+
+		jenkinsConfigFile, err := getJenkinsConfiguration(keptnEvent, logger)
+		if err != nil {
+			log.Fatalf("failed to create transport, %v", err)
+		} else {
+			logger.Info("Loaded Config File")
+			eventname := "configuration.change"
+			eventMapConfig, err := getEventMappingConfig(jenkinsConfigFile, eventname)
+
+			if err != nil {
+				logger.Info(fmt.Sprintf("No Event Mapping found for: %s", eventname))
+				return 0
+			} else {
+				logger.Info(fmt.Sprintf("Event Mapping %s points to action %s", eventname, eventMapConfig.Action))
+			}
+
+			var actionConfig *ActionConfig
+			actionConfig, err = getActionConfig(jenkinsConfigFile, eventMapConfig.Action)
+			if err != nil {
+				logger.Info(fmt.Sprintf("No Action Config found for: %s", eventMapConfig.Action))
+				return 0
+			}
+
+			logger.Info(string(makeJson(actionConfig.BuildParameters)))
+
+			var serverConfig *JenkinsServerConfig
+			serverConfig, err = getJenkinsServerConfig(jenkinsConfigFile, actionConfig.Server)
+			if err != nil {
+				logger.Info(fmt.Sprintf("No Server Config found for: %s", actionConfig.Server))
+				return 0
+			}
+
+			var success bool
+			success, err = executeJenkinsJobAndWaitForCompletion(eventMapConfig, actionConfig, serverConfig)
+			if err != nil {
+				logger.Info(fmt.Sprintf("Error executing: %s", err.Error()))
+			}
+
+			success, err = sendKeptnEventForEventConfig(
+				&keptnEvent, nil,
+				eventMapConfig,
+				success, logger)
+		}
+	} else {
+		if err != nil {
+			log.Fatalf("failed to create transport, %v", err)
+		}
+		c, err := client.New(t)
+		if err != nil {
+			log.Fatalf("failed to create client, %v", err)
+		}
+
+		log.Fatalf("failed to start receiver: %s", c.StartReceiver(ctx, processKeptnCloudEvent))
+	}
 
 	return 0
 }

@@ -416,6 +416,14 @@ func sendDeploymentFinishedEvent(shkeptncontext string, incomingEvent *cloudeven
 		deploymentFinishedData.Labels = labels
 	}
 
+	if deploymentURILocal != "" {
+		deploymentFinishedData.DeploymentURILocal = deploymentURILocal
+	}
+
+	if deploymentURIPublic != "" {
+		deploymentFinishedData.DeploymentURIPublic = deploymentURIPublic
+	}
+
 	event := cloudevents.Event{
 		Context: cloudevents.EventContextV02{
 			ID:          uuid.New().String(),
@@ -504,6 +512,12 @@ func sendTestsFinishedEvent(shkeptncontext string, incomingEvent *cloudevents.Ev
 // Sends a Cloud Native event to the endpoint configured in the env-variable EVENTBROKER, e.g: http://event-broker.keptn.svc.cluster.local/keptn
 //
 func sendCloudNativeEvent(event cloudevents.Event) error {
+	// log it out
+	if runlocal {
+		// dont send anything
+		return nil
+	}
+
 	endPoint, err := getServiceEndpoint(eventbroker)
 	if err != nil {
 		return errors.New("Failed to retrieve endpoint of eventbroker. %s" + err.Error())

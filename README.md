@@ -1,5 +1,5 @@
 # Jenkins Service for Keptn
-This is a Sandbox Keptn Service integrating [Jenkins](https://jenkins.io/). This service allows you to have Keptn trigger any Jenkins pipeline (parameterized or not) for tasks such as deployment, testing or promotion of artifacts. This keptn service will also wait until the Jenkins pipeline is done executing and report back the status to Keptn to continue the Keptn pipeline orchestration!
+This is a Sandbox Keptn Service integrating [Jenkins](https://jenkins.io/). This service allows you to have Keptn trigger any Jenkins job (parameterized or not) for tasks such as deployment, testing or promotion of artifacts. This keptn service will also wait until the Jenkins job is done executing and can send a Keptn event based on the outcome of that Jenkins job run in order to continue the Keptn pipeline orchestration!
 
 **ATTENTION: THIS REPO IS CURRENTLY UNDER DEVELOPMENT. Expecting a first version soon!**
 
@@ -45,6 +45,27 @@ kubectl delete -f deploy/service.yaml
 ```
 
 ## Usage
+
+The **jenkins-service** can be used to execute a Jenkins Job upon receival of a specific Keptn event, e.g: Configuration.Change can trigger a Jenkins Job to deploy that change
+The **jenkins-service** can also send a Keptn Event once the executed Jenkins Job is done, e.g: Deployment.Finished in case Jenkins Job deployed a new application
+
+I think the most common use cases are the following as described in this table:
+| Incoming Event    | Role of Jenkins Job  | Outgoing Event |
+|:----------------:|:----------------------------------------:|:-----------------------------:|
+| configuration.change | Deployment of that configuration change, e.g: deploy a new container, Java App, ... | deployment.finished event |
+| deployment.finished | Execute Automated Functional Tests against that app, e.g: Selenium Tests  | tests.finished event |
+
+In order to use the **jenkins-service** you need to create a jenkins.conf.yaml file and upload it to your Keptn Configuration Rep for your service in the jenkins subfolder. Here is an example:
+```
+keptn add-resource --project=PROJECTNAME --stage=STAGE --service=SERVICENAME --resource=jenkins/jenkins.conf.yaml
+```
+
+The **jenkins.conf.yaml** has 3 major sections:
+1. Event Mapping: Defines which Keptn Event should execute which action and what to do with the response
+2. Action Mapping: Defines which Jenkins Job should be executed with which parameters
+3. Jenkins Servers: A List of Jenkins Servers that are accessible via the Jenkins REST API
+
+There is a sample jenkins.conf.yaml in this repo. You will be able to see how to define your mappings.
 
 
 ## License

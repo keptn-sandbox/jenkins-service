@@ -25,6 +25,35 @@ spec:
               value: 'http://event-broker.keptn.svc.cluster.local/keptn'
             - name: CONFIGURATION_SERVICE
               value: 'http://configuration-service.keptn.svc.cluster.local:8080'
+            - name: JENKINS_URL
+              value: 'https://yourjenkinsserver.domain'
+            - name: JENKINS_USER
+              value: YOURJENKINS_USER
+            - name: JENKINS_PASSWORD
+              value: YOURJENKINS_PWD
+            - name: KEPTN_ENDPOINT
+              value: 'http://api.keptn.svc.cluster.local'
+            - name: KEPTN_DOMAIN
+              valueFrom:
+                configMapKeyRef:
+                  name: keptn-domain
+                  key: app_domain
+            - name: KEPTN_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: keptn-api-token
+                  key: keptn-api-token
+            - name: DT_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: dynatrace
+                  key: DT_API_TOKEN
+            - name: DT_TENANT
+              valueFrom:
+                secretKeyRef:
+                  name: dynatrace
+                  key: DT_TENANT              
+
 ---
 # Expose jenkins-service via Port 8080 within the cluster
 apiVersion: v1

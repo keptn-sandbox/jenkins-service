@@ -1,0 +1,34 @@
+---
+  spec_version: '0.1.0'
+  jenkinsservers:
+    - name: MyJenkinsServer
+      url: $ENV.JENKINS_URL
+      user: $ENV.JENKINS_USER
+      token: $ENV.JENKINS_PASSWORD
+  actions:
+    - name: MyKeptnJenkinsJob
+      server: MyJenkinsServer
+      jenkinsjob: TestPipelineWithParams
+      buildparameters:
+        Message: My message from Kept Project $PROJECT-$STAGE-$SERVICE
+        WaitTime: 2
+        Result: SUCCESS
+    - name: MyKeptnJenkinsJobWithFailure
+      server: MyJenkinsServer
+      jenkinsjob: TestPipelineWithParams
+      buildparameters:
+        Message: My message from Kept Project $PROJECT-$STAGE-$SERVICE
+        WaitTime: 2
+        Result: FAILURE
+  events:
+    - event: configuration.change
+      action: MyKeptnJenkinsJob
+      timeout: 60
+      onsuccess:
+        event: deployment.finished
+        deploymentURILocal: http://simplenode.simpleproject-staging
+        deploymentURIPublic: http://simplenode.simpleproject-staging.keptn06-agrabner.demo.keptn.sh
+        result: pass
+      onfailure:
+        event: deployment.finished
+        result: failed
