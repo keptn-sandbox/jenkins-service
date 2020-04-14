@@ -26,8 +26,7 @@
       timeout: 60
       onsuccess:
         event: deployment.finished
-        deploymentURILocal: http://simplenode.simpleproject-staging
-        deploymentURIPublic: http://simplenode.simpleproject-staging.keptn06-agrabner.demo.keptn.sh
+        deploymentURIPublic: http://yourdeployedapp.yourdomain
         result: pass
       onfailure:
         event: deployment.finished
