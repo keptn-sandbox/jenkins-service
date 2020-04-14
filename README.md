@@ -109,19 +109,23 @@ Let me quickly explain what it does (from bottom to top):
 4. **onfailure** it will send a deployment.finished event without a URI and a result of failed
 
 **Events: Mapping a Keptn Event to an Action**
+
 You can define any number of event mappings but only the first that matches the incoming Keptn Cloud Event (configuration.change, deployment.finished, tests.finished, ...) will trigger as the **jenkins-service** currently only supports executing a single Job for an incoming event.
 There are two options for **jenkins-service** to execute the job
 1. If you specifyy onsuccess and/or onfailure **jenkins-service** will wait for the Jenkins Job to finish execution unless it runs into the specified timeout. In this case it will send a new Keptn event based on the event and parameters specified
 2. If you DO NOT specify onsuccess or onfailure then **jenkins-service** only triggers the Jenkins Job and doesnt wait for any completion.
 
 **Actions: Defining the details for a Jenkins Job**
+
 As you can see in the example you can have multiple actions and each action has a logical name, e.g: MyKeptnJenkinsJob or MyJenkinsJenkinsJobWithFailure.
 An action always maps to a Jenkins Job that will be executed on a Jenkins Server and can have parameters. In the example above both actions are calling the same Jenkins Job called **TestPipelineWithParams*, but - each Job is called with slightly different parameters.
 
 **Jenkinsservers: Defining the credentials for the Jenkins API**
+
 The ** jenkins-service** uses the Jenkins REST API by leveraging the [Jenkins Go Client Library](https://github.com/bndr/gojenkins). What you need to specify is your Jenkins URL, username and password. In order to not have this information in clear text I suggest you do it like shown in the example: Use the ENV.placeholder capability and pass this confidential information as part of your deployment definition in service.yaml
 
 **Placeholders**
+
 I've implemented the same placeholders as in the [Generic Executor Service](https://github.com/keptn-sandbox/generic-executor-service). Here is the full overview:
 ```sh
 // Event Context
@@ -141,6 +145,7 @@ $ENV.YOURCUSTOMENV,$ENV.KEPTN_API_TOKEN,$ENV.KEPTN_ENDPOINT,...
 ```
 
 **keptn.result.yaml build artifact**
+
 By default the **jenkins-service** is invoking the job and waiting for it to finish. Depending on the build.result either sends the event specified under onsuccess or onfailure. An additional option here is that the **jenkins-server** is looking for a Jenkins Build Artifact that has to be called **keptn.result.yaml**. This file has to be a yaml with a field called data and a list of name value pairs. These name/value pairs will make it back to the **jenkins-service** and will be sent as part of the Keptn event defined in onsuccess or onfailure. Here is an example of such as keptn.result.yaml file:
 ```yaml
 data:
