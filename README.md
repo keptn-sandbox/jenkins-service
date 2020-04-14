@@ -1,13 +1,13 @@
 # Jenkins Service for Keptn
-This is a Sandbox Keptn Service integrating [Jenkins](https://jenkins.io/). This service allows you to have Keptn trigger any Jenkins job (parameterized or not) for tasks such as deployment, testing or promotion of artifacts. This keptn service will also wait until the Jenkins job is done executing and can send a Keptn event based on the outcome of that Jenkins job run in order to continue the Keptn pipeline orchestration!
+This is a Sandbox [Keptn](https://www.keptn.sh) Service integrating [Jenkins](https://jenkins.io/). This service allows you to have Keptn trigger any Jenkins job (parameterized or not) for tasks such as deployment, testing or promotion of artifacts. This keptn service will also wait until the Jenkins job is done executing and can send a Keptn event based on the outcome of that Jenkins job run in order to continue the Keptn pipeline orchestration!
 
 **ATTENTION: THIS REPO IS CURRENTLY UNDER DEVELOPMENT. Expecting a first version soon!**
 
 ## Compatibility Matrix
 
-| Keptn Version    | [Jenkins Service for Keptn] |
-|:----------------:|:----------------------------------------:|
-|       0.6.1      | grabner/jenkins-service:0.1.0 |
+| Keptn Version    | Jenkins Service for Keptn                | Description
+|:----------------:|:----------------------------------------:| --------- |
+|       0.6.1      | grabner/jenkins-service:0.1.0            | Initial Version |
 
 ## Installation
 
