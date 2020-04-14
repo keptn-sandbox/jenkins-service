@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math/rand"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/ghodss/yaml"
@@ -201,7 +204,7 @@ func executeJenkinsJob(actionConfig *ActionConfig, jenkinsServerConfig *JenkinsS
 /**
  * Executes the job and waits until completition if specified in the configuration
  */
-func executeJenkinsJobAndWaitForCompletion(eventMapConfig *EventMappingConfig, actionConfig *ActionConfig, jenkinsServerConfig *JenkinsServerConfig) (bool, error) {
+func executeJenkinsJobAndWaitForCompletion(eventMapConfig *EventMappingConfig, actionConfig *ActionConfig, jenkinsServerConfig *JenkinsServerConfig) (bool, *KeptnResultArtifact, error) {
 
 	// before we execute the job we save current time in the eventMap
 	eventMapConfig.startedAt = time.Now()
@@ -209,12 +212,12 @@ func executeJenkinsJobAndWaitForCompletion(eventMapConfig *EventMappingConfig, a
 
 	job, buildNumber, err := executeJenkinsJob(actionConfig, jenkinsServerConfig)
 	if err != nil {
-		return false, nil
+		return false, nil, nil
 	}
 
 	// lets see if we have to wait for the completion. If not we just return true!
 	if (len(eventMapConfig.OnSuccess) == 0) && (len(eventMapConfig.OnFailure) == 0) {
-		return true, nil
+		return true, nil, nil
 	}
 
 	// TODO - make sure we are polling the currently started job that might still be in queue -> https://github.com/bndr/gojenkins/issues/161
@@ -244,8 +247,7 @@ func executeJenkinsJobAndWaitForCompletion(eventMapConfig *EventMappingConfig, a
 		// then we query last build object
 		lastBuild, err = job.GetLastBuild()
 		if err != nil {
-			log.Printf("Couldnt retrieve last build from job %s. Error: %s", actionConfig.JenkinsJob, err.Error())
-			return false, err
+			return false, nil, fmt.Errorf("Couldnt retrieve last build from job %s. Error: %s", actionConfig.JenkinsJob, err.Error())
 		}
 
 		// now lets check the status
@@ -253,7 +255,16 @@ func executeJenkinsJobAndWaitForCompletion(eventMapConfig *EventMappingConfig, a
 			buildResult := lastBuild.GetResult()
 			log.Printf("Build %d finished with status: %s", lastBuild.GetBuildNumber(), buildResult)
 			eventMapConfig.finishedAt = time.Now()
-			return buildResult == "SUCCESS", nil
+
+			// lets check if there is a keptn.result.yaml in the build artifacts
+			var keptnResult *KeptnResultArtifact
+			keptnResult, err = getJenkinsBuildArtifacts(eventMapConfig, lastBuild)
+			if keptnResult != nil {
+				// we have additional results from the Jenkins Pipeline
+				log.Printf("Retrieved jenkins.conf.yaml!", keptnResult)
+			}
+
+			return buildResult == "SUCCESS", keptnResult, nil
 		}
 
 		log.Printf("Build %d still running. Checking again in %ds", lastBuild.GetBuildNumber(), DEFAULT_WAIT_RETRY)
@@ -267,13 +278,64 @@ func executeJenkinsJobAndWaitForCompletion(eventMapConfig *EventMappingConfig, a
 	logMessage := fmt.Sprintf("Job %s did not finish within %d seconds", actionConfig.JenkinsJob, timeout)
 	log.Printf(logMessage)
 	eventMapConfig.finishedAt = time.Now()
-	return false, errors.New(logMessage)
+	return false, nil, errors.New(logMessage)
+}
+
+/**
+ * Checks if the build has a keptn.result.yaml artifact!
+ * If it has - parses that yaml and returns the data map
+ */
+func getJenkinsBuildArtifacts(eventMapConfig *EventMappingConfig, build *gojenkins.Build) (*KeptnResultArtifact, error) {
+
+	// find the artifact matching keptn.result.yaml
+	build.Poll()
+	artifacts := build.GetArtifacts()
+
+	log.Printf("%d build artifacts found on Jenkins Job", len(artifacts))
+
+	for _, artifact := range artifacts {
+		log.Printf("Evaluating artifact %s", artifact.FileName)
+
+		if strings.Compare(artifact.FileName, KeptnResultYaml) == 0 {
+			// lets save that file locally with a unique file name
+			filename := fmt.Sprintf("%d_%s", rand.Int(), KeptnResultYaml)
+			success, err := artifact.Save(filename)
+			if err != nil {
+				return nil, err
+			}
+
+			if success == false {
+				return nil, errors.New("Couldn't save Jenkins build artifact to local disk!")
+			}
+
+			// lets read the file
+			fileContent, readerr := ioutil.ReadFile(filename)
+			if readerr != nil {
+				return nil, readerr
+			}
+
+			// remove the file again to not fill up our disk
+			os.Remove(filename)
+
+			// lets unmarshal it
+			keptnResult := &KeptnResultArtifact{}
+			err = yaml.Unmarshal([]byte(fileContent), &keptnResult)
+			if err != nil {
+				log.Printf("Error unmarshaling keptn.results.yaml: %s", err.Error())
+				return nil, err
+			}
+
+			return keptnResult, nil
+		}
+	}
+
+	return nil, nil
 }
 
 /**
  * Based on the actionSuccess sends the onSuccess or onFailure Event definition
  */
-func sendKeptnEventForEventConfig(incomingBaseEvent *baseKeptnEvent, incomingEvent *cloudevents.Event, eventMappingConfig *EventMappingConfig, actionSuccess bool, logger *keptnutils.Logger) (bool, error) {
+func sendKeptnEventForEventConfig(incomingBaseEvent *baseKeptnEvent, incomingEvent *cloudevents.Event, eventMappingConfig *EventMappingConfig, actionSuccess bool, keptnResult *KeptnResultArtifact, logger *keptnutils.Logger) (bool, error) {
 
 	// first lets get the correct OnXX data set
 	var eventData map[string]string
@@ -281,6 +343,14 @@ func sendKeptnEventForEventConfig(incomingBaseEvent *baseKeptnEvent, incomingEve
 		eventData = eventMappingConfig.OnSuccess
 	} else {
 		eventData = eventMappingConfig.OnFailure
+	}
+
+	// lets merge whats in keptnResult with eventData as this is the data that came back from the pipeline
+	if keptnResult != nil {
+		for name, value := range keptnResult.Data {
+			log.Printf("KeptnResult: %s=%s", name, value)
+			eventData[name] = value
+		}
 	}
 
 	// double check if we have to do anything at all, e.g: if there is no OnXX data set we are done
@@ -301,12 +371,12 @@ func sendKeptnEventForEventConfig(incomingBaseEvent *baseKeptnEvent, incomingEve
 	case "deployment.finished":
 		deploymentURILocal, _ := eventData["deploymentURILocal"]
 		deploymentURIPublic, _ := eventData["deploymentURIPublic"]
-
-		log.Println(deploymentURILocal, deploymentURIPublic)
+		result, _ := eventData["result"]
 
 		sendDeploymentFinishedEvent(incomingBaseEvent.context, incomingEvent, incomingBaseEvent.project, incomingBaseEvent.service, incomingBaseEvent.stage, incomingBaseEvent.testStrategy, incomingBaseEvent.deployment, "", "",
 			deploymentURILocal,
 			deploymentURIPublic,
+			result,
 			incomingBaseEvent.labels, logger)
 	case "tests.finished":
 		result, _ := eventData["result"]

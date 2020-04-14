@@ -379,11 +379,13 @@ func sendConfigurationChangeEvent(shkeptncontext string, incomingEvent *cloudeve
 //
 // Sends a DeploymentFinishedEventType = "sh.keptn.events.deployment-finished"
 //
-func sendDeploymentFinishedEvent(shkeptncontext string, incomingEvent *cloudevents.Event, project, service, stage, teststrategy, deploymentstrategy, image, tag, deploymentURILocal, deploymentURIPublic string, labels map[string]string, logger *keptnutils.Logger) error {
+func sendDeploymentFinishedEvent(shkeptncontext string, incomingEvent *cloudevents.Event, project, service, stage, teststrategy, deploymentstrategy, image, tag, deploymentURILocal, deploymentURIPublic string, result string, labels map[string]string, logger *keptnutils.Logger) error {
 	source, _ := url.Parse("jenkins-service")
 	contentType := "application/json"
 
-	deploymentFinishedData := keptnevents.DeploymentFinishedEventData{}
+	// Extending the DeploymentFinishedEventData
+	// deploymentFinishedData := keptnevents.DeploymentFinishedEventData{}
+	deploymentFinishedData := DeploymentFinishedEventData_Extended{}
 
 	// if we have an incoming event we pre-populate data
 	if incomingEvent != nil {
@@ -422,6 +424,11 @@ func sendDeploymentFinishedEvent(shkeptncontext string, incomingEvent *cloudeven
 
 	if deploymentURIPublic != "" {
 		deploymentFinishedData.DeploymentURIPublic = deploymentURIPublic
+	}
+
+	// set test result
+	if result != "" {
+		deploymentFinishedData.Result = result
 	}
 
 	event := cloudevents.Event{
@@ -482,7 +489,7 @@ func sendTestsFinishedEvent(shkeptncontext string, incomingEvent *cloudevents.Ev
 
 	// fill in timestamps
 	testFinishedData.Start = startedAt.Format(time.RFC3339)
-	testFinishedData.End = time.Now().Format(time.RFC3339)
+	testFinishedData.End = finishedAt.Format(time.RFC3339)
 
 	// set test result
 	testFinishedData.Result = result

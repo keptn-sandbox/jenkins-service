@@ -10,19 +10,19 @@
       server: MyJenkinsServer
       jenkinsjob: TestPipelineWithParams
       buildparameters:
-        Message: My message from Kept Project $PROJECT-$STAGE-$SERVICE
+        Message: My message from Keptn Project $PROJECT-$STAGE-$SERVICE
         WaitTime: 2
         Result: SUCCESS
     - name: MyKeptnJenkinsJobWithFailure
       server: MyJenkinsServer
       jenkinsjob: TestPipelineWithParams
       buildparameters:
-        Message: My message from Kept Project $PROJECT-$STAGE-$SERVICE
+        Message: My message from Keptn Project $PROJECT-$STAGE-$SERVICE
         WaitTime: 2
         Result: FAILURE
   events:
     - event: configuration.change
-      action: MyKeptnJenkinsJob
+      action: MyKeptnJenkinsJob 
       timeout: 60
       onsuccess:
         event: deployment.finished

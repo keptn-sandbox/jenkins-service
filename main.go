@@ -258,7 +258,8 @@ func _main(args []string, env envConfig) int {
 			}
 
 			var success bool
-			success, err = executeJenkinsJobAndWaitForCompletion(eventMapConfig, actionConfig, serverConfig)
+			var keptnResult *KeptnResultArtifact
+			success, keptnResult, err = executeJenkinsJobAndWaitForCompletion(eventMapConfig, actionConfig, serverConfig)
 			if err != nil {
 				logger.Info(fmt.Sprintf("Error executing: %s", err.Error()))
 			}
@@ -266,7 +267,8 @@ func _main(args []string, env envConfig) int {
 			success, err = sendKeptnEventForEventConfig(
 				&keptnEvent, nil,
 				eventMapConfig,
-				success, logger)
+				success, keptnResult,
+				logger)
 		}
 	} else {
 		if err != nil {
@@ -313,7 +315,7 @@ func _mainTests(args []string, env envConfig) int {
 	}
 	if (testType == "*") || (testType == keptnevents.DeploymentFinishedEventType) {
 		log.Println("Execute Deployment Finished Test")
-		err = sendDeploymentFinishedEvent(shkeptncontext, nil, "project", "service", "stage", "performance", "direct", "serviceimage", "2.0.0", "http://service.stage.svc.local", "https://service.stage.yourkeptndomain.com", labels, nil)
+		err = sendDeploymentFinishedEvent(shkeptncontext, nil, "project", "service", "stage", "performance", "direct", "serviceimage", "2.0.0", "success", "http://service.stage.svc.local", "https://service.stage.yourkeptndomain.com", labels, nil)
 	}
 	if (testType == "*") || (testType == keptnevents.TestsFinishedEventType) {
 		log.Println("Execute Tests Finished Change Test")

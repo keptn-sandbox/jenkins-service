@@ -67,7 +67,7 @@ The **jenkins.conf.yaml** has 3 major sections:
 3. **Jenkins Servers**: A List of Jenkins Servers that are accessible via the Jenkins REST API
 
 There is a sample [jenkins.conf.yaml](jenkins/jenkins.conf.yaml) in this repo.
-```
+```yaml
 spec_version: '0.1.0'
 jenkinsservers:
   - name: MyJenkinsServer
@@ -79,14 +79,14 @@ actions:
     server: MyJenkinsServer
     jenkinsjob: TestPipelineWithParams
     buildparameters:
-      Message: My message from Kept Project $PROJECT-$STAGE-$SERVICE for event $EVENT
+      Message: My message from Keptn Project $PROJECT-$STAGE-$SERVICE for event $EVENT
       WaitTime: 2
       Result: SUCCESS
   - name: MyKeptnJenkinsJobWithFailure
     server: MyJenkinsServer
     jenkinsjob: TestPipelineWithParams
     buildparameters:
-      Message: My message from Kept Project $PROJECT-$STAGE-$SERVICE for event $EVENT
+      Message: My message from Keptn Project $PROJECT-$STAGE-$SERVICE for event $EVENT
       WaitTime: 2
       Result: FAILURE
 events:
@@ -123,7 +123,7 @@ The ** jenkins-service** uses the Jenkins REST API by leveraging the [Jenkins Go
 
 **Placeholders**
 I've implemented the same placeholders as in the [Generic Executor Service](https://github.com/keptn-sandbox/generic-executor-service). Here is the full overview:
-```
+```sh
 // Event Context
 $CONTEXT,$EVENT,$SOURCE,$TIMESTRING,$TIMEUTCSTRING,$TIMEUTCMS
 
@@ -140,29 +140,48 @@ $LABEL.gitcommit,$LABEL.anotherlabel,$LABEL.xxxx
 $ENV.YOURCUSTOMENV,$ENV.KEPTN_API_TOKEN,$ENV.KEPTN_ENDPOINT,...
 ```
 
+**keptn.result.yaml build artifact**
+By default the **jenkins-service** is invoking the job and waiting for it to finish. Depending on the build.result either sends the event specified under onsuccess or onfailure. An additional option here is that the **jenkins-server** is looking for a Jenkins Build Artifact that has to be called **keptn.result.yaml**. This file has to be a yaml with a field called data and a list of name value pairs. These name/value pairs will make it back to the **jenkins-service** and will be sent as part of the Keptn event defined in onsuccess or onfailure. Here is an example of such as keptn.result.yaml file:
+```yaml
+data:
+  deploymentURIPublic: http://deployedservice.mydomain
+``` 
+
 
 ## Jenkins Sample Job
 
-To build this **jenkins-service** I used a very simply Jenkins Job Pipeline to test this out. It is a parameterized job with 3 parameters
+To build this **jenkins-service** I used a very simply Jenkins Job Pipeline to test this out. It is a parameterized job with 4 parameters
 1. Message: Just a simple message that is echoed. This allows me to test the Keptn Placeholders, e.g: $SERVICE ...
 2. SleepTime: The value is used in a sleep statement - this allows me to control the length of the job run
 3. Result: The value will be used to set the build status. Therefore allows me to simulate a SUCCESS or FAILURE status
-```
+4. URI: This is a URI that will be written back into the keptn.result.yaml file to be pushed back to Keptn
+
+As you can see - the job is not only pretending to doing some work :-)
+The job is also leveraging the integration that allows a Jenkins Job to pass values back to the **jenkins-service** service via the **keptn.result.yaml** build artifact file. The values in that file will be used by the **jenkins-service** as input parameter when sending the response event back to Keptn, e.g: a deployment.finished event
+
+```json
 node {
    properties([
         parameters([
          string(defaultValue: 'This is the default message', description: '', name: 'Message', trim: false), 
          string(defaultValue: '5', description: '', name: 'SleepTime', trim: false), 
-         string(defaultValue: 'SUCCESS', description: 'Use SUCCESS or FAILURE', name: 'Result', trim: false)
+         string(defaultValue: 'SUCCESS', description: 'Use SUCCESS or FAILURE', name: 'Result', trim: false),
+         string(defaultValue: 'http://myapp.mydomain', description: 'DeploymentURI', name: 'URI', trim: false)
         ])
     ])
    stage('Preparation') {
-           echo "${params.Message}"
+       echo "${params.Message}"
    }
    stage('Doing') {
-           sleep "${params.SleepTime}"
+       sleep "${params.SleepTime}"
    }
    stage('Results') {
+       // First we write keptn.resut.yaml to pass more parameters back to Keptn
+       sh 'echo "data:" > keptn.result.yaml'
+       sh 'echo "  deploymentURIPublic: ' + "${params.URI}" + '" >> keptn.result.yaml'
+       archiveArtifacts artifacts: 'keptn.result.yaml'
+       
+       // Then set the pipeline status
        currentBuild.result = "${params.Result}"
    }
 }

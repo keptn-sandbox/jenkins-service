@@ -52,7 +52,8 @@ func handleEvent(eventname string, event cloudevents.Event, keptnEvent baseKeptn
 	}
 
 	var success bool
-	success, err = executeJenkinsJobAndWaitForCompletion(eventMapConfig, actionConfig, serverConfig)
+	var keptnResult *KeptnResultArtifact
+	success, keptnResult, err = executeJenkinsJobAndWaitForCompletion(eventMapConfig, actionConfig, serverConfig)
 	if err != nil {
 		return fmt.Errorf("Error executing: %s", err.Error())
 	}
@@ -61,7 +62,8 @@ func handleEvent(eventname string, event cloudevents.Event, keptnEvent baseKeptn
 	success, err = sendKeptnEventForEventConfig(
 		&keptnEvent, &event,
 		eventMapConfig,
-		success, logger)
+		success, keptnResult,
+		logger)
 
 	return err
 }
