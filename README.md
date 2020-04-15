@@ -164,7 +164,7 @@ To build this **jenkins-service** I used a very simply Jenkins Job Pipeline to t
 As you can see - the job is not only pretending to doing some work :-)
 The job is also leveraging the integration that allows a Jenkins Job to pass values back to the **jenkins-service** service via the **keptn.result.yaml** build artifact file. The values in that file will be used by the **jenkins-service** as input parameter when sending the response event back to Keptn, e.g: a deployment.finished event
 
-```json
+```
 node {
    properties([
         parameters([
