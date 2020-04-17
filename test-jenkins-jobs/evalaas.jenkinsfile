@@ -1,0 +1,141 @@
+node {
+   properties([
+        parameters([
+         string(defaultValue: 'perfservice', description: 'Name of your Keptn Project you have setup for Performance as a Self-Service', name: 'Project', trim: false), 
+         string(defaultValue: 'performance', description: 'Keptn stage used for Performance Feedback', name: 'Stage', trim: false), 
+         string(defaultValue: 'simplenodeservice', description: 'Keptn Service that has SLIs & SLOs defined', name: 'Service', trim: false),
+         string(defaultValue: '2020-04-17T11:00:00.000Z', description: 'Start timestamp', name: 'StartTime', trim: false),
+         string(defaultValue: '2020-04-17T11:30:00.000Z', description: 'End timestamp', name: 'EndTime', trim: false),
+         booleanParam(defaultValue: false, description: 'Wait for result? This will block the pipeline until results ready!', name: 'WaitForResult'),
+        ])
+   ])
+
+   script {
+       env.keptnContext = ""
+   }
+    
+   stage('Trigger Evaluation') {
+        def keptnContext = sendStartEvaluationEvent project:"${params.Project}", service:"${params.Service}", stage:"${params.Stage}", starttime:"${params.StartTime}", endtime:"${params.EndTime}" 
+        env.keptnContext = keptnContext
+        String keptn_bridge = env.KEPTN_BRIDGE
+       
+        echo "Open Keptns Bridge: ${keptn_bridge}/trace/${keptnContext}"
+   }
+   stage('Wait for Result') {
+       def result = waitForEvaluationDoneEvent keptnContext:env.keptnContext
+
+       echo "${result}"
+   }
+}
+
+
+def sendStartEvaluationEvent(Map args) {
+    
+    /* String project, String stage, String service, String deploymentURI, String testStrategy */
+    String keptn_endpoint = args.containsKey("keptn_endpoint") ? args.keptn_endpoint : env.KEPTN_ENDPOINT
+    String keptn_api_token = args.containsKey("keptn_api_token") ? args.keptn_api_token : env.KEPTN_API_TOKEN
+
+    String project = args.containsKey("project") ? args.project : ""
+    String stage = args.containsKey("stage") ? args.stage : ""
+    String service = args.containsKey("service") ? args.service : ""
+    
+    String starttime = args.containsKey("starttime") ? args.starttime : ""
+    String endtime = args.containsKey("endtime") ? args.endtime : ""
+
+    echo "Sending a Start-Evaluation event to Keptn for ${project}.${stage}.${service} for ${starttime} - ${endtime}"
+    
+    def requestBody = """{
+        |  "contenttype": "application/json",
+        |  "data": {
+        |    "teststrategy" : "manual",
+        |    "project": "${project}",
+        |    "service": "${service}",
+        |    "stage": "${stage}",
+        |    "start": "${starttime}",
+        |    "end" : "${endtime}",
+        |    "labels": {
+        |      "build" : "${BUILD_NUMBER}",
+        |      "jobname" : "${JOB_NAME}",
+        |      "joburl" : "${BUILD_URL}"
+        |    }
+        |  },
+        |  "source": "Jenkins",
+        |  "specversion": "0.2",
+        |  "type": "sh.keptn.event.start-evaluation"
+        |}
+    """.stripMargin()
+
+    echo requestBody  
+  
+    def response = httpRequest contentType: 'APPLICATION_JSON', 
+      customHeaders: [[maskValue: true, name: 'x-token', value: "${keptn_api_token}"]], 
+      httpMode: 'POST', 
+      requestBody: requestBody, 
+      responseHandle: 'STRING', 
+      url: "${keptn_endpoint}/v1/event", 
+      validResponseCodes: "100:404", 
+      ignoreSslErrors: true
+      
+    println("Status: "+response.status)
+    println("Content: "+response.content)      
+
+    def keptnResponseJson = readJSON text: response.content
+    def keptnContext = keptnResponseJson['keptnContext']
+    
+    echo "Retrieved KeptnContext: ${keptnContext}"
+    
+    return keptnContext
+}
+
+/**
+ * waitForEvaluationDoneEvent(keptn_context, [keptn_endpoint, keptn_api_token])
+ */
+def waitForEvaluationDoneEvent(Map args) {
+    
+    /* String project, String stage, String service, String deploymentURI, String testStrategy */
+    String keptn_endpoint = args.containsKey("keptn_endpoint") ? args.keptn_endpoint : env.KEPTN_ENDPOINT
+    String keptn_api_token = args.containsKey("keptn_api_token") ? args.keptn_api_token : env.KEPTN_API_TOKEN
+
+    String keptn_context = args.containsKey("keptnContext") ? args.keptnContext : ""
+
+    echo "Wait for Evaluation Done for keptnContext: ${keptnContext}"
+
+    def evalResponse = ""
+    timeout(time: 3, unit: 'MINUTES') {
+        script {
+            waitUntil {
+                // Post the Keptn Context to the Keptn api to get the Evaluation-done event
+                def response = httpRequest contentType: 'APPLICATION_JSON', 
+                    customHeaders: [[maskValue: true, name: 'x-token', value: "${keptn_api_token}"]], 
+                    httpMode: 'GET', 
+                    responseHandle: 'STRING', 
+                    url: "${keptn_endpoint}/v1/event?keptnContext=${keptn_context}&type=sh.keptn.events.evaluation-done", 
+                    validResponseCodes: "100:500", 
+                    ignoreSslErrors: true
+
+                //The API returns a response code 500 error if the evalution done event does not exisit
+                if (response.status == 500 || response.content.contains("No Keptn sh.keptn.events.evaluation-done event found for context") ) {
+                    sleep 10
+                    return false
+                } else {
+                    evalResponse = response.content
+                    return true
+                } 
+            }
+        }
+    }
+    
+    if (evalResponse == "") {
+        echo "Didnt receive any successful keptn evaluation results"
+        return false;
+    }
+
+    println("Content: "+evalResponse)
+
+    def keptnResponseJson = readJSON text: evalResponse
+    def score = keptnResponseJson['data']['evaluationdetails']['score']
+    
+    echo "Retrieved Score: ${score}"
+    
+    return score
+}
