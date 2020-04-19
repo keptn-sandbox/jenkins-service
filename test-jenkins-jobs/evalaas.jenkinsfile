@@ -1,34 +1,78 @@
 node {
-   properties([
+    properties([
         parameters([
          string(defaultValue: 'perfservice', description: 'Name of your Keptn Project you have setup for Performance as a Self-Service', name: 'Project', trim: false), 
          string(defaultValue: 'performance', description: 'Keptn stage used for Performance Feedback', name: 'Stage', trim: false), 
          string(defaultValue: 'simplenodeservice', description: 'Keptn Service that has SLIs & SLOs defined', name: 'Service', trim: false),
-         string(defaultValue: '2020-04-17T11:00:00.000Z', description: 'Start timestamp', name: 'StartTime', trim: false),
-         string(defaultValue: '2020-04-17T11:30:00.000Z', description: 'End timestamp', name: 'EndTime', trim: false),
+         string(defaultValue: '', description: 'Start timestamp. If empty will assume EndTime is time in seconds', name: 'StartTime', trim: false),
+         string(defaultValue: '60', description: 'End timestamp or seconds', name: 'EndTime', trim: false),
          booleanParam(defaultValue: false, description: 'Wait for result? This will block the pipeline until results ready!', name: 'WaitForResult'),
         ])
-   ])
-
-   script {
-       env.keptnContext = ""
-   }
+    ])
     
-   stage('Trigger Evaluation') {
+    stage('Trigger Evaluation') {
+        // def startTime = markEvaluationStartTime()
+
         def keptnContext = sendStartEvaluationEvent project:"${params.Project}", service:"${params.Service}", stage:"${params.Stage}", starttime:"${params.StartTime}", endtime:"${params.EndTime}" 
-        env.keptnContext = keptnContext
         String keptn_bridge = env.KEPTN_BRIDGE
        
         echo "Open Keptns Bridge: ${keptn_bridge}/trace/${keptnContext}"
-   }
-   stage('Wait for Result') {
-       def result = waitForEvaluationDoneEvent keptnContext:env.keptnContext
+    }
+    stage('Wait for Result') {
+       def result = waitForEvaluationDoneEvent setBuildResult:true
 
        echo "${result}"
-   }
+    }
 }
 
+def getKeptnContextJsonFilename() {return "keptn.context.json"}
+def getKeptnInputJsonFilename() {return "keptn.input.${BUILD_NUMBER}.json"}
 
+/** 
+ * Stores the current local time in keptn.input.json
+ */
+def markEvaluationStartTime() {
+    def startTime = java.time.LocalDateTime.now().toString()
+
+    def keptnContextFileJson
+    if (fileExists(file: getKeptnInputJsonFilename())) {
+        def keptnContextFileContent = readFile getKeptnInputJsonFilename()
+        keptnContextFileJson = readJSON text: keptnContextFileContent
+        keptnContextFileJson["starttime"] = startTime
+    } else {
+        keptnContextFileJson = [starttime:startTime]
+    }
+
+    writeJSON file: getKeptnInputJsonFilename(), json: keptnContextFileJson
+
+    return startTime
+}
+
+/** 
+ * reads the starttime from keptn.input.json or ""
+ */
+def getEvaluationStartTime() {
+    if (fileExists(file: getKeptnInputJsonFilename())) {
+        def keptnContextFileContent = readFile getKeptnInputJsonFilename()
+        def keptnContextFileJson = readJSON text: keptnContextFileContent
+        if (keptnContextFileJson.containsKey("starttime")) {
+            return keptnContextFileJson["starttime"]
+        }
+    }
+    
+    return ""
+}
+
+/**
+ * sendStartEvaluationEvent(project, stage, service, starttime, endtime, [keptn_endpoint, keptn_api_token])
+ * will start an evaluation and stores the keptn context in keptn.context.json
+ * if starttime == "" --> it will first look it up in keptn.context.json.
+ * if starttime == "" && endtime == number in seconds --> it will calculate the timeframe endtime==Now(), starttime=Now()-number in seconds
+ * if starttime != "" && endtime == "" --> it will default to Now
+ * Here are a couple of usage options 
+ * Last 10 minutes: starttime="", endtime=600
+ * From starttime untile now: starttime="2020-04-17T11:30:00.000Z", endtime=""
+ */
 def sendStartEvaluationEvent(Map args) {
     
     /* String project, String stage, String service, String deploymentURI, String testStrategy */
@@ -42,6 +86,37 @@ def sendStartEvaluationEvent(Map args) {
     String starttime = args.containsKey("starttime") ? args.starttime : ""
     String endtime = args.containsKey("endtime") ? args.endtime : ""
 
+    echo "${starttime} - ${endtime}"
+
+    // lets check on timeframe based on the usage scenarios we support
+    if (starttime == "") {
+        starttime = getEvaluationStartTime()
+        echo "#1 - ${starttime} - ${endtime}"
+    }
+    if ((starttime == "") && (endtime != "")) {
+        // check if endtime is a number which would represent seconds
+        def seconds = endtime?.isInteger() ? endtime.toInteger() : 0
+        if (seconds > 0) {
+            endtime = java.time.LocalDateTime.now().toString()
+            starttime = java.time.LocalDateTime.now().minusSeconds((int)seconds).toString()
+            echo "#2 - ${starttime} - ${endtime}"
+        }
+    }
+    if ((starttime != "") && (endtime == "")) {
+        endtime = java.time.LocalDateTime.now().toString()
+        echo "#3 - ${starttime} - ${endtime}"
+    }
+
+    if ((starttime == "") || (endtime == "")) {
+        echo "Startime (${starttime}) and endtime (${endtime}) not correctly passed!"
+        return false;
+    }
+
+    if ((project == "") || (stage == "") || (service == "")) {
+        echo "Method requires project, stage and service to be set. These values cant be empty!"
+        return false;
+    }
+
     echo "Sending a Start-Evaluation event to Keptn for ${project}.${stage}.${service} for ${starttime} - ${endtime}"
     
     def requestBody = """{
@@ -51,8 +126,8 @@ def sendStartEvaluationEvent(Map args) {
         |    "project": "${project}",
         |    "service": "${service}",
         |    "stage": "${stage}",
-        |    "start": "${starttime}",
-        |    "end" : "${endtime}",
+        |    "start": "${starttime}Z",
+        |    "end" : "${endtime}Z",
         |    "labels": {
         |      "build" : "${BUILD_NUMBER}",
         |      "jobname" : "${JOB_NAME}",
@@ -75,7 +150,11 @@ def sendStartEvaluationEvent(Map args) {
       url: "${keptn_endpoint}/v1/event", 
       validResponseCodes: "100:404", 
       ignoreSslErrors: true
-      
+
+    // write response to keptn.context.json & add to artifacts
+    writeFile file: getKeptnContextJsonFilename(), text: response.content
+    archiveArtifacts artifacts: getKeptnContextJsonFilename()
+
     println("Status: "+response.status)
     println("Content: "+response.content)      
 
@@ -88,17 +167,30 @@ def sendStartEvaluationEvent(Map args) {
 }
 
 /**
- * waitForEvaluationDoneEvent(keptn_context, [keptn_endpoint, keptn_api_token])
+ * waitForEvaluationDoneEvent(setBuildResult, [keptn_context, keptn_endpoint, keptn_api_token])
  */
 def waitForEvaluationDoneEvent(Map args) {
     
-    /* String project, String stage, String service, String deploymentURI, String testStrategy */
+    Boolean setBuildResult = args.containsKey("setBuildResult") ? args.setBuildResult : false 
     String keptn_endpoint = args.containsKey("keptn_endpoint") ? args.keptn_endpoint : env.KEPTN_ENDPOINT
     String keptn_api_token = args.containsKey("keptn_api_token") ? args.keptn_api_token : env.KEPTN_API_TOKEN
-
     String keptn_context = args.containsKey("keptnContext") ? args.keptnContext : ""
 
-    echo "Wait for Evaluation Done for keptnContext: ${keptnContext}"
+    if ((keptn_context == "") && fileExists(file: getKeptnContextJsonFilename())) {
+        def keptnContextFileContent = readFile getKeptnContextJsonFilename()
+        def keptnContextFileJson = readJSON text: keptnContextFileContent
+        keptn_context = keptnContextFileJson['keptnContext']
+    }
+
+    if (keptn_context == "") {
+        echo "Couldnt find a current keptnContext. Not getting evaluation results"
+        if (setBuildResult) {
+           currentBuild.result = 'FAILURE' 
+        }
+        return false;
+    }
+
+    echo "Wait for Evaluation Done for keptnContext: ${keptn_context}"
 
     def evalResponse = ""
     timeout(time: 3, unit: 'MINUTES') {
@@ -127,15 +219,37 @@ def waitForEvaluationDoneEvent(Map args) {
     
     if (evalResponse == "") {
         echo "Didnt receive any successful keptn evaluation results"
+        if (setBuildResult) {
+            currentBuild.result = 'FAILURE' 
+        }
         return false;
     }
 
-    println("Content: "+evalResponse)
+    // write result to file and archive it
+    writeFile file: "keptn.evaluationresult.${keptn_context}.json", text: evalResponse
+    archiveArtifacts artifacts: "keptn.evaluationresult.${keptn_context}.json"
+    println("Archived Keptn Evaluation Done Result details in keptn.evaluationresult.${keptn_context}.json")
 
     def keptnResponseJson = readJSON text: evalResponse
     def score = keptnResponseJson['data']['evaluationdetails']['score']
+    def result = keptnResponseJson['data']['evaluationdetails']['result']
     
-    echo "Retrieved Score: ${score}"
-    
+    echo "Retrieved Score: ${score}, Result: ${result}"
+
+    // set build result depending on score
+    if (setBuildResult) {
+        switch(result) {
+            case "pass":
+                currentBuild.result = 'SUCCESS' 
+                break;
+            case "warning":
+                currentBuild.result = 'UNSTABLE' 
+                break;
+            default:
+                currentBuild.result = 'FAILURE' 
+                break;
+        }
+    }
+
     return score
 }
