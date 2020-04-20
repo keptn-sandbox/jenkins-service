@@ -25,8 +25,114 @@ node {
     }
 }
 
-def getKeptnContextJsonFilename() {return "keptn.context.json"}
-def getKeptnInputJsonFilename() {return "keptn.input.${BUILD_NUMBER}.json"}
+def getKeptnContextJsonFilename() {return "keptn.context.${BUILD_NUMBER}.json"}
+def getKeptnInitJsonFilename() {return "keptn.init.${BUILD_NUMBER}.json"}
+
+/** 
+ * keptnInit(project, stage, service, [shipyard local file])
+ * Stores these values in keptn.init.json and makes sure that the Keptn project, stage and service exists
+ * If shipyard is specified will create the project with the passed shipyard. If the project already exists it will just return the indicator that the project exists
+ */
+def keptnInit(Map args) {
+    String keptn_endpoint = args.containsKey("keptn_endpoint") ? args.keptn_endpoint : env.KEPTN_ENDPOINT
+    String keptn_api_token = args.containsKey("keptn_api_token") ? args.keptn_api_token : env.KEPTN_API_TOKEN
+
+    String project = args.containsKey("project") ? args.project : ""
+    String stage = args.containsKey("stage") ? args.stage : ""
+    String service = args.containsKey("service") ? args.service : ""
+
+    if ((project == "") || (stage == "") || (service == "")) {
+        echo "keptnInit requires project, stage and service to be set. These values cant be empty!"
+        return false;
+    }
+
+     def initContent = """{
+        |  "project": "${project}",
+        |  "service": "${service}",
+        |  "stage": "${stage}",
+        |}
+    """.stripMargin()
+
+    writeFile file: getKeptnInitJsonFilename(), text: initContent
+
+    // lets see if a shipyard was passed - if so - create the project and the service
+    if (args.containsKey(shipyard)) {
+        // Step #1: Create Project
+        //perform base64 encoding on shipyard file
+        def shipyardFileContent = readFile(args.shipyard)
+        String shipyardBase64Encoded = shipyardFileContent.bytes.encodeBase64().toString()
+
+        def createProjectBody = """{
+            "name" : "${project}", 
+            "shipyard" : "${shipyardBase64Encoded}"
+        }"""
+        def createProjectResponse = httpRequest contentType: 'APPLICATION_JSON', 
+            customHeaders: [[maskValue: true, name: 'x-token', value: "${keptn_api_token}"]], 
+            httpMode: 'POST', 
+            requestBody: createProjectBody, 
+            responseHandle: 'STRING', 
+            url: "${keptn_endpoint}/v1/project", 
+            validResponseCodes: "100:404"
+
+        if (createProjectResponse.status == 200) {
+            echo "Created new Keptn Project: ${project}"
+        } else {
+            echo "Couldnt create Keptn Project ${project}: " + createProjectResponse.content          
+        }
+
+        // Step #2: Create Service
+        def createServiceBody = """{
+            "name" : "${service}"
+        }"""
+        def createServiceResponse = httpRequest contentType: 'APPLICATION_JSON', 
+            customHeaders: [[maskValue: true, name: 'x-token', value: "${keptn_api_token}"]], 
+            httpMode: 'POST', 
+            requestBody: createServiceBody, 
+            responseHandle: 'STRING', 
+            url: "${keptn_endpoint}/v1/project/${project/service}", 
+            validResponseCodes: "100:404"
+
+        if (createServiceResponse.status == 200) {
+            echo "Created new Keptn Service: ${service}"
+        } else {
+            echo "Couldnt create Keptn Service ${service}: " + createServiceResponse.content          
+        }        
+    }
+}
+
+/**
+ * keptnAddResources(['localfile1': remotelocation1,'localfile2': remotelocation, ...])
+ * Allows you to upload one or more local files to the remote resource on keptn
+ */
+def keptnAddResources(fileMap) {
+
+    def requestBody = "{"
+
+    for ( fileEntry in fileMap ) {
+        print "key = ${e.key}, value = ${e.value}"
+
+        def localFile = readFile("${fileEntry.key}")
+
+        //perform base64 encoding
+        String localFileBase64Encoded = localFile.bytes.encodeBase64().toString()
+
+        //Update SLO in keptn
+        requestBody = requestBody + """
+            "resources" : [{"resourceURI": "${fileEntry.value}","resourceContent": "${localFileBase64Encoded}"}]
+        """
+    }
+    def requestBody = requestBody + "{"
+
+    def addResourceResponse = httpRequest contentType: 'APPLICATION_JSON', 
+        customHeaders: [[maskValue: true, name: 'x-token', value: "${keptn_api_token}"]], 
+        httpMode: 'POST', 
+        requestBody: requestBody, 
+        responseHandle: 'STRING', 
+        url: "${keptn_endpoint}/v1/project/${project}/stage/${stage}/service/${service}/resource", 
+        validResponseCodes: "100:404"
+
+    echo "Response from upload resource: " + addResourceResponse.content
+}
 
 /** 
  * Stores the current local time in keptn.input.json
@@ -35,15 +141,15 @@ def markEvaluationStartTime() {
     def startTime = java.time.LocalDateTime.now().toString()
 
     def keptnContextFileJson
-    if (fileExists(file: getKeptnInputJsonFilename())) {
-        def keptnContextFileContent = readFile getKeptnInputJsonFilename()
+    if (fileExists(file: getKeptnInitJsonFilename())) {
+        def keptnContextFileContent = readFile getKeptnInitJsonFilename()
         keptnContextFileJson = readJSON text: keptnContextFileContent
         keptnContextFileJson["starttime"] = startTime
     } else {
         keptnContextFileJson = [starttime:startTime]
     }
 
-    writeJSON file: getKeptnInputJsonFilename(), json: keptnContextFileJson
+    writeJSON file: getKeptnInitJsonFilename(), json: keptnContextFileJson
 
     return startTime
 }
@@ -52,8 +158,8 @@ def markEvaluationStartTime() {
  * reads the starttime from keptn.input.json or ""
  */
 def getEvaluationStartTime() {
-    if (fileExists(file: getKeptnInputJsonFilename())) {
-        def keptnContextFileContent = readFile getKeptnInputJsonFilename()
+    if (fileExists(file: getKeptnInitJsonFilename())) {
+        def keptnContextFileContent = readFile getKeptnInitJsonFilename()
         def keptnContextFileJson = readJSON text: keptnContextFileContent
         if (keptnContextFileJson.containsKey("starttime")) {
             return keptnContextFileJson["starttime"]
