@@ -7,7 +7,7 @@ This is a Sandbox [Keptn](https://www.keptn.sh) Service integrating [Jenkins](ht
 
 | Keptn Version    | Jenkins Service for Keptn                | Description
 |:----------------:|:----------------------------------------:| --------- |
-|       0.6.1      | grabner/jenkins-service:0.1.0            | Initial Version |
+|       0.6.1      | grabnerandi/jenkins-service:0.1.0            | Initial Version |
 
 ## Installation
 
