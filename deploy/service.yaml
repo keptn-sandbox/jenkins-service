@@ -17,7 +17,8 @@ spec:
     spec:
       containers:
         - name: jenkins-service
-          image: keptnsandbox/jenkins-service:latest # Todo: Replace this with your image name
+          image: grabnerandi/jenkins-service:0.1.0
+          # image: keptnsandbox/jenkins-service:latest # Todo: Replace this with your image name
           ports:
             - containerPort: 8080
           env:
